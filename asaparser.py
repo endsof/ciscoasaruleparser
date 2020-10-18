@@ -8,7 +8,7 @@ with open('config.cfg', 'r') as f:
     config = f.read()
 
 # выхватываем полностью объект/группу, тип, имя и тело объекта.
-pattern = r'(object|object-group) (network|protocol|service) ([\w\-]+)((?:\n [^\n]+)+)'
+pattern = r'(object|object-group) (network|protocol|service) ([\w\-\.]+)((?:\n [^\n]+)+)'
 raw_objects = re.findall(pattern, config)
 
 def extract_obj (obj_name):
@@ -45,7 +45,7 @@ def extract_obj (obj_name):
 
                 elif raw_obj[1] == 'service':
                     # выхватываем только Destination порты, Source игнорим...
-                    raw_service = re.search(r'service ([\w\-]+) (?:source (?:eq [\w\-]+|range \d+ \d+) )?destination (?:eq ([\w\-]+)|range (\d+ \d+))', obj)
+                    raw_service = re.search(r'service ([\w\-\.]+) (?:source (?:eq [\w\-\.]+|range \d+ \d+) )?destination (?:eq ([\w\-\.]+)|range (\d+ \d+))', obj)
                     # 1 - protocol
                     # 2 - dst port
                     # 3 - dst port-range
@@ -61,22 +61,23 @@ def extract_obj (obj_name):
             
             # вылавливаем группы
             elif raw_obj[0] == 'object-group':
-                if raw_obj[1] == 'network':
 
-                    net_objs = re.findall(r'network-object (?:object ([\w\-]+)|(\d+\.\d+.\d+\.\d+ \d+\.\d+.\d+\.\d+))', obj)
+                if raw_obj[1] == 'network':
+                    net_objs = re.findall(r'network-object (?:object ([\w\-\.]+)|(\d+\.\d+.\d+\.\d+ \d+\.\d+.\d+\.\d+))', obj)
 
                     for net_obj in net_objs:
                         if net_obj[0]:
                             results.extend(extract_obj(net_obj[0]))
                         elif net_obj[1]:
-                            results.extend(ip_network(net_obj[1].replace(' ', '/')).exploded)
+                            results.append(ip_network(net_obj[1].replace(' ', '/')).exploded)
+                            print(results)
 
-                    group_objs = re.findall(r'group-object ([\w\-]+)', obj)
+                    group_objs = re.findall(r'group-object ([\w\-\.]+)', obj)
                     for group_obj in group_objs:
                         results.extend(extract_obj(group_obj))
                 
                 elif raw_obj[1] == 'service':
-                    serv_objs = re.findall(r'service-object (?:object ([\w\-]+)|([\w\-]+))(?: source (?:eq [\w\-]+|range \d+ \d+))?(?: destination (?:eq ([\w\-]+)|range (\d+ \d+)))?', obj)
+                    serv_objs = re.findall(r'service-object (?:object ([\w\-\.]+)|([\w\-\.]+))(?: source (?:eq [\w\-\.]+|range \d+ \d+))?(?: destination (?:eq ([\w\-\.]+)|range (\d+ \d+)))?', obj)
                     # 0 - object name
                     # 1 - protocol
                     # 2 - dst port
@@ -97,25 +98,34 @@ def extract_obj (obj_name):
                             results.append((protocol, port))
 
                 elif raw_obj[1] == 'protocol':
-                    prot_objs = re.findall(r'protocol-object ([\w\-]+)', obj)
-                    results = prot_objs
+                    prot_objs = re.findall(r'protocol-object ([\w\-\.]+)', obj)
+                    results = [prot_objs]
+
+            #debug
+            print(Fore.GREEN + obj_name)
+            print(results)
 
             break
+
     return results
 
 
 # Паттерн для ACL
 acl_pattern = re.compile('access-list {interface} extended {rule} {protocol} {src} {dst}{service}'.format(
-    interface=r'([[\w\-]+)',
+    interface=r'([[\w\-\.]+)',
     rule=r'(permit|deny)',
-    protocol=r'(object-group [[\w\-]+|object [[\w\-]+|[[\w\-]+)',
-    src=r'(object-group [\w\-]+|object [\w\-]+|\d+\.\d+.\d+\.\d+ \d+\.\d+.\d+\.\d+|host \d+\.\d+.\d+\.\d+|[\w\-]+)',
-    dst=r'(object-group [\w\-]+|object [\w\-]+|\d+\.\d+.\d+\.\d+ \d+\.\d+.\d+\.\d+|host \d+\.\d+.\d+\.\d+|[\w\-]+)',
-    service=r'(?: eq ([\w\-]+))?'
+    protocol=r'(object-group [[\w\-\.]+|object [[\w\-\.]+|[[\w\-\.]+)',
+    src=r'(object-group [\w\-\.]+|object [\w\-\.]+|\d+\.\d+.\d+\.\d+ \d+\.\d+.\d+\.\d+|host \d+\.\d+.\d+\.\d+|[\w\-\.]+)',
+    dst=r'(object-group [\w\-\.]+|object [\w\-\.]+|\d+\.\d+.\d+\.\d+ \d+\.\d+.\d+\.\d+|host \d+\.\d+.\d+\.\d+|[\w\-\.]+)',
+    service=r'(?: eq ([\w\-\.]+))?'
 ))
 # 1 - interface
 # 2 - rule
 # 3 - 
+
+# create csv header
+with open("vulns.csv", "w") as f:
+    f.write("INTERFACE;RULE;SRCIP;DSTIP;PROTOCOL;PORT\n")
 
 for row in config.split('\n'):
     if row.startswith('access-list'):
@@ -127,28 +137,33 @@ for row in config.split('\n'):
 
             service_raw = acl[3]
             if service_raw.startswith('object'):
-                service = extract_obj(service_raw.split(' ')[1])
+                services = extract_obj(service_raw.split(' ')[1])
             else:
                 if acl[6]:
                     service = [(acl[3], acl[6])]
                 else:
                     service = [(acl[3], None)]
 
-            src = acl[4]
-            if src.startswith('object'):
-                src = extract_obj(src.split(' ')[1])
+            if acl[4].startswith('object'):
+                srcs = extract_obj(acl[4].split(' ')[1])
+            else:
+                srcs = [acl[4]]
+            
+            #debug
+            if row.startswith('access-list DMZ_lacp_access_in extended permit object-group active-directory object-group DM_INLINE_NETWORK_46 object-group DC'):
+                print(Fore.LIGHTRED_EX + 'SRCS:', srcs)
+                input()
 
-            dst = acl[5]
-            if dst.startswith('object'):
-                dst = extract_obj(dst.split(' ')[1])
-
-            print(Fore.GREEN + 'ACCESS-LIST:', row)
-            print(Fore.LIGHTYELLOW_EX + 'INTERFACE:', interface)
-            print(Fore.LIGHTYELLOW_EX + 'RULE:', rule)
-            print(Fore.LIGHTYELLOW_EX + 'SRC:', src)
-            print(Fore.LIGHTYELLOW_EX + 'DST:', dst)
-            print(Fore.LIGHTYELLOW_EX + 'SERVICE', service)
-            input()
+            if acl[5].startswith('object'):
+                dsts = extract_obj(acl[5].split(' ')[1])
+            else:
+                dsts = [acl[5]]
+            
+            for service in services:
+                for src in srcs:
+                    for dst in dsts:
+                        with open('rules.csv', 'a') as f:
+                            f.write("{};{};{};{};{};{};{}\n".format(interface, rule, src, dst, service[0], service[1], row))
         
         else:
             if 'remark' not in row:
