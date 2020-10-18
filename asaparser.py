@@ -97,13 +97,14 @@ def extract_obj (obj_name, raw_objs):
 
 
 # Access Lists
-acl_pattern = re.compile('access-list {interface} extended {rule} {protocol} {srcip} {dstip}{service}'.format(
+acl_pattern = re.compile('access-list {interface} extended {rule} {protocol} {srcip} {dstip}{service}{state}'.format(
     interface=r'([[\w\-\.]+)',
     rule=r'(permit|deny)',
     protocol=r'(object-group [[\w\-\.]+|object [[\w\-\.]+|[[\w\-\.]+)',
-    srcip=r'(object-group [\w\-\.]+|object [\w\-\.]+|\d+\.\d+.\d+\.\d+ \d+\.\d+.\d+\.\d+|host \d+\.\d+.\d+\.\d+|[\w\-\.]+)',
-    dstip=r'(object-group [\w\-\.]+|object [\w\-\.]+|\d+\.\d+.\d+\.\d+ \d+\.\d+.\d+\.\d+|host \d+\.\d+.\d+\.\d+|[\w\-\.]+)',
-    service=r'(?: eq ([\w\-\.]+))?'
+    srcip=r'(interface [\w\-\.]+|object-group [\w\-\.]+|object [\w\-\.]+|\d+\.\d+.\d+\.\d+ \d+\.\d+.\d+\.\d+|[\w\-\.]+)',
+    dstip=r'(interface [\w\-\.]+|object-group [\w\-\.]+|object [\w\-\.]+|\d+\.\d+.\d+\.\d+ \d+\.\d+.\d+\.\d+|[\w\-\.]+)',
+    service=r'(?: eq ([\w\-\.]+))?',
+    state=r'( inactive)?'
 ))
 
 with open('config.cfg', 'r') as f:
@@ -122,7 +123,7 @@ for row in config.split('\n'):
     if row.startswith('access-list'):
         
         acl = acl_pattern.search(row)
-        if acl:
+        if acl and (not acl[7]):
             interface = acl[1]
             rule = acl[2]
 
@@ -153,8 +154,4 @@ for row in config.split('\n'):
                 for srcip in srcips:
                     for dstip in dstips:
                         with open('rules.csv', 'a') as f:
-                            f.write("{};{};{};{};{};{};{};{};{}\n".format(interface, rule, srcip[0], srcip[1], dstip[0], dstip[1], service[0], service[1], row))
-
-        else:
-            if 'remark' not in row:
-                raise Exception("ACL not found!\n", row)            
+                            f.write("{};{};{};{};{};{};{};{};{}\n".format(interface, rule, srcip[0], srcip[1], dstip[0], dstip[1], service[0], service[1], row))           
