@@ -1,0 +1,103 @@
+# ACL example:
+	access-list {interface} extended {rule} {protocol} {srcip} {dstip}{service}{state}
+
+# ACL structure:
+
+	access-list
+
+		#INTERFACE
+		{INTERFACE_NAME}
+		
+			extended
+			
+				#RULE
+				permit
+				deny
+				
+					#PROTOCOL
+					{PROTOCOL_NAME}
+					object {OBJECT_NAME}
+					object-group {OBJECT_GROUP_NAME}
+					
+						#SRC IP
+						{IPADDR} {MASK}
+						object {OBJECT_NAME}
+						object-group {OBJECT_GROUP_NAME}
+						interface {INTERFACE_NAME}
+							
+							#DST IP
+							{IPADDR} {MASK}
+							object {OBJECT_NAME}
+							object-group {OBJECT_GROUP_NAME}
+							interface {INTERFACE_NAME}
+								
+								#DST PORT
+								eq {PORT_NAME}
+								
+									#STATE
+									inactive
+
+
+# object structure:
+
+	object:
+	
+		network
+		
+			host {IPADDR}
+			range {IPADDR} {IPADDR}
+			subnet {IPADDR} {MASK}	
+			
+		service
+		
+			{PROTOCOL_NAME}
+			
+				source
+				
+					eq {PORT_NAME|PORT_NUMBER}
+					range {PORT_NUMBER} {PORT_NUMBER}
+					
+				destination
+				
+					eq {PORT_NAME|PORT_NUMBER}
+					range {PORT_NUMBER} {PORT_NUMBER}
+
+
+# object-group network structure:
+
+	network-object
+	
+		{IPADDR} {MASK}
+		object {OBJECT_NAME}
+		group-object {OBJECT_GROUP_NAME}
+		
+		
+# object-group protocol structure:
+
+	protocol-object {PROTOCOL_NAME}
+
+	
+# object-group service structure:
+
+	service-object 
+	
+		{PROTOCOL_NAME}
+		
+			destination
+			
+				eq {PORT_NAME|PORT_NUMBER}
+				range {PORT_NUMBER} {PORT_NUMBER}
+				
+			source
+			
+				eq {PORT_NAME|PORT_NUMBER}
+				range {PORT_NUMBER} {PORT_NUMBER}
+				
+					destination
+					
+						eq {PORT_NAME|PORT_NUMBER}
+						range {PORT_NUMBER} {PORT_NUMBER}		
+						
+		object {OBJECT_NAME}
+		group-object {OBJECT_GROUP_NAME}
+		
