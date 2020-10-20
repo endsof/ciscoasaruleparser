@@ -10,6 +10,9 @@ def extract_obj (obj_name, raw_objs):
     '''
     results = []
 
+    #debug
+    print(Fore.GREEN + obj_name)
+
     for raw_obj in raw_objs:
         obj = raw_obj[3]
 
@@ -88,7 +91,6 @@ def extract_obj (obj_name, raw_objs):
                     results = [prot_objs]
 
             #debug
-            print(Fore.GREEN + obj_name)
             print(results)
 
             break
@@ -133,21 +135,29 @@ for row in config.split('\n'):
                 services = extract_obj(service_raw.split(' ')[1], raw_objs)
             else:
                 if acl[6]:
-                    service = [(acl[3], acl[6])]
+                    services = [(acl[3], acl[6])]
                 else:
-                    service = [(acl[3], None)]
-
+                    services = [(acl[3], None)]
+            
             # Src IP
-            if acl[4].startswith('object'):
-                srcips = extract_obj(acl[4].split(' ')[1], raw_objs)
+            srcips = acl[4]
+            if srcips.startswith('object'):
+                srcips = extract_obj(srcips.split(' ')[1], raw_objs)
+            elif srcips.startswith('any'):
+                srcips = [('[NETWORK]', srcips)]
             else:
-                srcips = [(None, acl[4])]
+                srcips = [('[NETWORK]', ip_network(srcips.replace(' ', '/')))]
             
             # Dst IP
-            if acl[5].startswith('object'):
-                dstips = extract_obj(acl[5].split(' ')[1], raw_objs)
+            dstips = acl[5]
+            if dstips.startswith('object'):
+                dstips = extract_obj(dstips.split(' ')[1], raw_objs)
+            elif dstips.startswith('any'):
+                dstips = [('[NETWORK]', dstips)]
             else:
-                dstips = [(None, acl[5])]
+                dstips = [('[NETWORK]', ip_network(dstips.replace(' ', '/')))]
+
+
             
             # Iterate through the services/srcip/dstip and write to file
             for service in services:
