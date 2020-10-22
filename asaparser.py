@@ -8,8 +8,6 @@ def extract_obj(obj_name, objs_dict):
     '''
     Searches ASA object/object-group by name recursively and returns object properties
     '''
-    results = []
-    #debug
     print(Fore.GREEN + 'Extract object:', obj_name)
 
     # Search object
@@ -49,14 +47,7 @@ def extract_obj(obj_name, objs_dict):
         
         results = [(protocol, port)]
 
-    #debug 
-    if not results:
-        print('"' + obj_name + '"')
-        print('"' + obj_type + '"')
-        print('"' + obj_body + '"')
-        raise Exception("Sorry")
     print(results)
-
     return results
 
 def extract_grp(grp_name, objs_dict):
@@ -64,8 +55,6 @@ def extract_grp(grp_name, objs_dict):
     Searches ASA object-group by name recursively and returns list of parsed objects
     '''
     results = []
-
-    #debug
     print(Fore.GREEN + 'Extract object-group:', grp_name)
 
     grp = objs_dict[grp_name]
@@ -110,9 +99,7 @@ def extract_grp(grp_name, objs_dict):
     for grp_obj in grp_objs:
         results.extend(extract_grp(grp_obj, objs_dict))
 
-    #debug
     print(results)
-
     return results
 
 
@@ -130,47 +117,53 @@ for raw_obj in raw_objs:
 
 # CSV header
 with open("rules.csv", "w") as f:
-    f.write("Interface;Rule;SrcFQDN;SrcIP;DstFQDN;DstIP;Protocol;Port;ACL\n")
+    f.write("Interface;Rule;SrcFQDN;SrcIP;DstFQDN;DstIP;Protocol;Port;Description;ACL\n")
 
 # Access Lists
-acl_pattern = re.compile('access-list {interface} extended {rule} {protocol} {srcip} {dstip}{service}{state}'.format(
+# ACL description
+descr_pattern = re.compile(r'access-list [\w\-\.]+ remark (.+)')
+# ACL rule
+acl_pattern = re.compile('access-list {interface} extended {rule} {protocol} {hosts} {hosts}{port}{state}'.format(
     interface=r'([[\w\-\.]+)',
     rule=r'(permit|deny)',
     protocol=r'(object-group [[\w\-\.]+|object [[\w\-\.]+|[[\w\-\.]+)',
-    srcip=r'(interface [\w\-\.]+|object-group [\w\-\.]+|object [\w\-\.]+|\d+\.\d+.\d+\.\d+ \d+\.\d+.\d+\.\d+|[\w\-\.]+)',
-    dstip=r'(interface [\w\-\.]+|object-group [\w\-\.]+|object [\w\-\.]+|\d+\.\d+.\d+\.\d+ \d+\.\d+.\d+\.\d+|[\w\-\.]+)',
-    service=r'(?: eq ([\w\-\.]+))?',
+    hosts=r'(interface [\w\-\.]+|object-group [\w\-\.]+|object [\w\-\.]+|\d+\.\d+.\d+\.\d+ \d+\.\d+.\d+\.\d+|[\w\-\.]+)',
+    port=r'(?: eq ([\w\-\.]+))?',
     state=r'( inactive)?'
 ))
+# Regex groups: 1-interface, 2-rule, 3-protocol, 4-srcips, 5-dstips, 6-port, 7-state
 
 # Config parse
+descr = ''
 for row in config.split('\n'):
-    if row.startswith('access-list '):
-        
+    if row.startswith('access-list'):
+
         acl = acl_pattern.search(row)
 
-        if acl and (not acl[7]):
-            interface = acl[1]
-            rule = acl[2]
+        if acl:
+            # skip inactive rules
+            if acl.group(7):
+                continue
+
+            interface = acl.group(1)
+            rule = acl.group(2)
 
             # Protocol & Ports
-            services = acl[3]
+            services = acl.group(3)
             if services.startswith('object'):
                 services = services.split(' ')
                 if services[0] == 'object':
                     services = extract_obj(services[1], objs_dict)
                 elif services[0] == 'object-group':
                     services = extract_grp(services[1], objs_dict)
-                else:
-                    raise Exception("Service type not found")
             else:
-                if acl[6]:
-                    services = [(services, acl[6])]
+                if acl.group(6):
+                    services = [(services, acl.group(6))]
                 else:
                     services = [(services, None)]
             
             # Src IP
-            srcips = acl[4]
+            srcips = acl.group(4)
             if srcips.startswith('object'):
                 srcips = srcips.split(' ')
                 if srcips[0] == 'object':
@@ -183,7 +176,7 @@ for row in config.split('\n'):
                 srcips = [('[NETWORK]', ip_network(srcips.replace(' ', '/')))]
             
             # Dst IP
-            dstips = acl[5]
+            dstips = acl.group(5)
             if dstips.startswith('object'):
                 dstips = dstips.split(' ')
                 if dstips[0] == 'object':
@@ -200,4 +193,10 @@ for row in config.split('\n'):
                 for dstip in dstips:
                     for service in services:
                         with open('rules.csv', 'a') as f:
-                            f.write("{};{};{};{};{};{};{};{};{}\n".format(interface, rule, srcip[0], srcip[1], dstip[0], dstip[1], service[0], service[1], row))           
+                            f.write("{};{};{};{};{};{};{};{};{};{}\n".format(interface, rule, srcip[0], srcip[1], dstip[0], dstip[1], service[0], service[1], descr, row))
+            
+            # Remove old description
+            descr = ''
+
+        else:
+            descr = descr_pattern.search(row).group(1)
