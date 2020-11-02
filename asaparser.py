@@ -85,7 +85,7 @@ def extract_grp(grp_name, objs_dict):
                 elif serv_obj[3]:
                     port = serv_obj[3].replace(' ', '-')
                 else:
-                    port = None
+                    port = ''
 
                 results.append((protocol, port))            
 
@@ -160,7 +160,7 @@ for row in config.split('\n'):
                 if acl.group(6):
                     services = [(services, acl.group(6))]
                 else:
-                    services = [(services, None)]
+                    services = [(services, '')]
             
             # Src IP
             srcips = acl.group(4)
