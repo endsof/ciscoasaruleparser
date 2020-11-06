@@ -71,7 +71,7 @@ def extract_grp(grp_name, objs_dict):
                 results.append(('[NETWORK]', ip_network(net_obj[1].replace(' ', '/')).exploded))
     
     # service-object
-    elif raw_obj[1] == 'service':
+    elif grp_type == 'service':
         serv_objs = re.findall(r'service-object (?:object ([\w\-\.]+)|([\w\-\.]+))(?: source (?:eq [\w\-\.]+|range \d+ \d+))?(?: destination (?:eq ([\w\-\.]+)|range (\d+ \d+)))?', grp_body)
         # Regex groups: 0 - object name, 1 - protocol, 2 - dst port, 3 - dst port-range
 
@@ -90,7 +90,7 @@ def extract_grp(grp_name, objs_dict):
                 results.append((protocol, port))            
 
     # protocol-object
-    elif raw_obj[1] == 'protocol':
+    elif grp_type == 'protocol':
         prot_objs = re.findall(r'protocol-object ([\w\-\.]+)', grp_body)
         results = prot_objs
 
