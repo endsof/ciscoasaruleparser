@@ -91,7 +91,7 @@ def extract_grp(grp_name, objs_dict):
 
     # protocol-object
     elif grp_type == 'protocol':
-        prot_objs = re.findall(r'protocol-object ([\w\-\.]+)', grp_body)
+        prot_objs = re.findall(r'protocol-object ([\w\-\.]+)()', grp_body)
         results = prot_objs
 
     # group-object
@@ -161,7 +161,7 @@ for row in config.split('\n'):
                     services = [(services, acl.group(6))]
                 else:
                     services = [(services, '')]
-            
+
             # Src IP
             srcips = acl.group(4)
             if srcips.startswith('object'):
