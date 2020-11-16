@@ -38,14 +38,20 @@ def extract_obj(obj_name, objs_dict):
     elif obj_type == 'service':
         # Getting only destination ports, source ports will be ignored...
         # Regex groups: 1 - protocol, 2 - dst port, 3 - dst port-range
-        raw_service = re.search(r'service ([\w\-\.]+) (?:source (?:eq [\w\-\.]+|range \d+ \d+) )?destination (?:eq ([\w\-\.]+)|range (\d+ \d+))', obj_body) 
-        protocol = raw_service[1]
-        if raw_service[2]:
-            port = raw_service[2]
-        elif raw_service[3]:
-            port = raw_service[3].replace(' ', '-')
+        raw_service = re.search(r'service (\S+) (?:source (?:eq \S+|range \d+ \d+) )?destination (?:eq (\S+)|range (\d+ \d+))', obj_body) 
+
+        if raw_service:
+            protocol = raw_service[1]
+            if raw_service[2]:
+                port = raw_service[2]
+            elif raw_service[3]:
+                port = raw_service[3].replace(' ', '-')
+            
+            results = [(protocol, port)]
         
-        results = [(protocol, port)]
+        else:
+            print(Fore.LIGHTRED_EX + 'Service not found...')
+            results = [('', '')]
 
     print(results)
     return results
@@ -63,7 +69,7 @@ def extract_grp(grp_name, objs_dict):
 
     # network-object
     if grp_type == 'network':
-        net_objs = re.findall(r'network-object (?:object ([\w\-\.]+)|(\d+\.\d+.\d+\.\d+ \d+\.\d+.\d+\.\d+))', grp_body)
+        net_objs = re.findall(r'network-object (?:object (\S+)|(\d+\.\d+.\d+\.\d+ \d+\.\d+.\d+\.\d+))', grp_body)
         for net_obj in net_objs:
             if net_obj[0]:
                 results.extend(extract_obj(net_obj[0], objs_dict))
@@ -72,7 +78,7 @@ def extract_grp(grp_name, objs_dict):
     
     # service-object
     elif grp_type == 'service':
-        serv_objs = re.findall(r'service-object (?:object ([\w\-\.]+)|([\w\-\.]+))(?: source (?:eq [\w\-\.]+|range \d+ \d+))?(?: destination (?:eq ([\w\-\.]+)|range (\d+ \d+)))?', grp_body)
+        serv_objs = re.findall(r'service-object (?:object (\S+)|(\S+))(?: source (?:eq \S+|range \d+ \d+))?(?: destination (?:eq (\S+)|range (\d+ \d+)))?', grp_body)
         # Regex groups: 0 - object name, 1 - protocol, 2 - dst port, 3 - dst port-range
 
         for serv_obj in serv_objs:
@@ -91,11 +97,11 @@ def extract_grp(grp_name, objs_dict):
 
     # protocol-object
     elif grp_type == 'protocol':
-        prot_objs = re.findall(r'protocol-object ([\w\-\.]+)()', grp_body)
+        prot_objs = re.findall(r'protocol-object (\S+)()', grp_body)
         results = prot_objs
 
     # group-object
-    grp_objs = re.findall(r'group-object ([\w\-\.]+)', grp_body)
+    grp_objs = re.findall(r'group-object (\S+)', grp_body)
     for grp_obj in grp_objs:
         results.extend(extract_grp(grp_obj, objs_dict))
 
@@ -107,7 +113,7 @@ with open('config.cfg', 'r') as f:
     config = f.read()
 
 # Getting full object/object-group, type, name and object body.
-pattern = r'(object|object-group) (network|protocol|service) ([\w\-\.]+)((?:\n [^\n]+)+)'
+pattern = r'(object|object-group) (network|protocol|service) (\S+)((?:\n [^\n]+)+)'
 # Regex groups: 0 - object/object-group, 1 - object type, 2 - object name, 3 - object body
 raw_objs = re.findall(pattern, config)
 
@@ -121,14 +127,14 @@ with open("rules.csv", "w") as f:
 
 # Access Lists
 # ACL description
-descr_pattern = re.compile(r'access-list [\w\-\.]+ remark (.+)')
+descr_pattern = re.compile(r'access-list \S+ remark (.+)')
 # ACL rule
 acl_pattern = re.compile('access-list {interface} extended {rule} {protocol} {hosts} {hosts}{port}{state}'.format(
-    interface=r'([[\w\-\.]+)',
+    interface=r'(\S+)',
     rule=r'(permit|deny)',
-    protocol=r'(object-group [[\w\-\.]+|object [[\w\-\.]+|[[\w\-\.]+)',
-    hosts=r'(interface [\w\-\.]+|object-group [\w\-\.]+|object [\w\-\.]+|\d+\.\d+.\d+\.\d+ \d+\.\d+.\d+\.\d+|[\w\-\.]+)',
-    port=r'(?: eq ([\w\-\.]+))?',
+    protocol=r'(object-group \S+|object \S+|\S+)',
+    hosts=r'(interface \S+|object-group \S+|object \S+|\d+\.\d+.\d+\.\d+ \d+\.\d+.\d+\.\d+|\S+)',
+    port=r'(?: eq (\S+))?',
     state=r'( inactive)?'
 ))
 # Regex groups: 1-interface, 2-rule, 3-protocol, 4-srcips, 5-dstips, 6-port, 7-state
@@ -141,6 +147,7 @@ for row in config.split('\n'):
         acl = acl_pattern.search(row)
 
         if acl:
+            print('\n' + Fore.CYAN + row)
             # skip inactive rules
             if acl.group(7):
                 continue
@@ -172,6 +179,10 @@ for row in config.split('\n'):
                     srcips = extract_grp(srcips[1], objs_dict)     
             elif srcips.startswith('any'):
                 srcips = [('[ANY]', srcips)]
+            elif srcips.startswith('interface'):
+                srcips = [('[INTERFACE]', srcips)]
+            elif srcips.startswith('host'):
+                srcips = [('[HOST]', srcips)]
             else:
                 srcips = [('[NETWORK]', ip_network(srcips.replace(' ', '/')))]
             
@@ -185,6 +196,10 @@ for row in config.split('\n'):
                     dstips = extract_grp(dstips[1], objs_dict)
             elif dstips.startswith('any'):
                 dstips = [('[ANY]', dstips)]
+            elif dstips.startswith('interface'):
+                dstips = [('[INTERFACE]', dstips)]
+            elif dstips.startswith('host'):
+                dstips = [('[HOST]', dstips)]
             else:
                 dstips = [('[NETWORK]', ip_network(dstips.replace(' ', '/')))]
             
